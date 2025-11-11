@@ -65,7 +65,7 @@ st.markdown(f'<div class="refresh-indicator">🔄 Last updated: {refresh_time}</
 # -------------------------------------
 # ⚙️ GOOGLE SHEETS SETUP
 # -------------------------------------
-SHEET_NAME = "Class LinkedIn Hub"
+SHEET_NAME = "myconnections"
 WORKSHEET_INDEX = 0
 
 @st.cache_resource(ttl=600)
