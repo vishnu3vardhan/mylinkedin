@@ -74,7 +74,11 @@ def get_gspread_client():
         sa_info = st.secrets["gcp_service_account"]
         sa_json = json.loads(sa_info) if isinstance(sa_info, str) else sa_info
         creds = Credentials.from_service_account_info(
-            sa_json, scopes=["https://www.googleapis.com/auth/spreadsheets"]
+            sa_json, scopes=[
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive",
+                "https://www.googleapis.com/auth/drive.file"
+            ]
         )
     else:
         creds = Credentials.from_service_account_file(
