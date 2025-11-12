@@ -211,3 +211,6 @@ __pycache__/
 *.pyc
 service_account.json
 .env
+
+# Ignore local secrets
+.streamlit/
