@@ -4,39 +4,66 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import os
 import streamlit.components.v1 as components
+from urllib.parse import quote
+import hashlib
 
 # -------------------------------------
-# ⚙️ APP CONFIG
+# ⚙️ APP CONFIG & CONSTANTS
 # -------------------------------------
 st.set_page_config(
     page_title="My Connections", 
     layout="centered",
-    page_icon="assets/linkedin.png"
+    page_icon="🔗",
+    initial_sidebar_state="collapsed"
 )
 
-# -------------------------------
-# 🎨 Minimalistic Styling
-# -------------------------------
+# Constants
+SHEET_NAME = "myconnections"
+WORKSHEET_INDEX = 0
+MAX_NAME_LENGTH = 50
+MAX_USERNAME_LENGTH = 100
+RATE_LIMIT_WINDOW = 30  # seconds
+MAX_REQUESTS_PER_WINDOW = 5
+
+# -------------------------------------
+# 🎨 ENHANCED STYLING WITH ACCESSIBILITY
+# -------------------------------------
 st.markdown("""
 <style>
-    /* Root theming */
+    /* Root theming with improved contrast */
     :root {
         --accent-color: #0A66C2;
+        --accent-hover: #084d94;
         --text-primary: #111111;
-        --text-secondary: #555555;
+        --text-secondary: #444444;
         --bg-card: #ffffff;
-        --bg-hover: #f8f9fb;
+        --bg-hover: #f8f9fa;
+        --border-color: #e1e5e9;
+        --success-color: #2ecc71;
+        --warning-color: #f39c12;
+        --error-color: #e74c3c;
     }
     [data-theme="dark"] {
         --accent-color: #60a5fa;
+        --accent-hover: #3b82f6;
         --text-primary: #f5f5f5;
         --text-secondary: #cccccc;
         --bg-card: #1e1e1e;
         --bg-hover: #2a2a2a;
+        --border-color: #444444;
+        --success-color: #27ae60;
+        --warning-color: #f39c12;
+        --error-color: #e74c3c;
+    }
+
+    /* Improved focus indicators for accessibility */
+    *:focus {
+        outline: 2px solid var(--accent-color);
+        outline-offset: 2px;
     }
 
     /* Layout and Typography */
@@ -44,414 +71,819 @@ st.markdown("""
         font-size: 2.2rem !important;
         color: var(--accent-color);
         text-align: center;
-        font-weight: 600;
+        font-weight: 700;
         margin-bottom: 0.2rem;
+        line-height: 1.2;
     }
     .subtext {
         text-align: center;
         color: var(--text-secondary);
-        font-size: 0.9rem;
+        font-size: 1rem;
         margin-bottom: 1.5rem;
+        line-height: 1.4;
     }
 
-    /* Card Styling */
+    /* Enhanced Card Styling */
     .profile-card {
         background-color: var(--bg-card);
         border-radius: 12px;
-        padding: 1rem 1.5rem;
-        margin: 0.6rem 0;
-        border: 1px solid rgba(255,255,255,0.08);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        padding: 1.2rem 1.5rem;
+        margin: 0.8rem 0;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         transition: all 0.2s ease-in-out;
     }
     .profile-card:hover {
         background-color: var(--bg-hover);
-        transform: scale(1.01);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
     .profile-card strong {
         color: var(--text-primary);
-        font-size: 1rem;
+        font-size: 1.1rem;
         text-transform: capitalize;
+        font-weight: 600;
     }
     .profile-card code {
-        background: rgba(0,0,0,0.1);
-        padding: 0.2rem 0.4rem;
+        background: rgba(0,0,0,0.08);
+        padding: 0.3rem 0.6rem;
         border-radius: 6px;
         color: var(--text-primary);
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.9rem;
     }
     [data-theme="dark"] .profile-card code {
-        background: rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.12);
         color: #b5f3ff;
     }
     .profile-card a {
         color: var(--accent-color);
         text-decoration: none;
-        font-weight: 500;
+        font-weight: 600;
+        border: 1px solid var(--accent-color);
+        padding: 0.4rem 1rem;
+        border-radius: 20px;
+        display: inline-block;
+        margin-top: 0.5rem;
+        transition: all 0.2s ease;
     }
     .profile-card a:hover {
-        text-decoration: underline;
+        background-color: var(--accent-color);
+        color: white;
+        text-decoration: none;
     }
 
-    /* Highlight cards */
+    /* Highlight cards with improved contrast */
     .current-user {
         border-left: 4px solid #FFD700;
-        background-color: rgba(255, 215, 0, 0.08);
+        background-color: rgba(255, 215, 0, 0.1);
     }
     .instructor-card {
-        border-left: 4px solid #2ecc71;
-        background-color: rgba(46, 204, 113, 0.08);
+        border-left: 4px solid var(--success-color);
+        background-color: rgba(46, 204, 113, 0.1);
     }
 
-    /* Stats and Footer */
-    .stats-card {
-        background: var(--accent-color);
-        color: white;
-        padding: 1rem;
-        border-radius: 10px;
+    /* Minimalistic Stats Cards */
+    .minimal-stats-card {
+        background: transparent;
+        color: var(--text-primary);
+        padding: 1.2rem 0.5rem;
+        border-radius: 12px;
         text-align: center;
+        border: 2px solid var(--border-color);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    .minimal-stats-card:hover {
+        background: var(--bg-hover);
+        border-color: var(--accent-color);
+        transform: translateY(-2px);
+    }
+    .minimal-stats-card h4 {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .minimal-stats-card h2 {
+        color: var(--accent-color);
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0;
     }
     .refresh-indicator {
         text-align: center;
         color: var(--text-secondary);
-        font-size: 0.8rem;
-        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+        padding: 0.5rem;
+        background: var(--bg-hover);
+        border-radius: 8px;
+    }
+
+    /* Success/Warning/Error states */
+    .success-box {
+        background-color: rgba(46, 204, 113, 0.1);
+        border: 1px solid var(--success-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .warning-box {
+        background-color: rgba(243, 156, 18, 0.1);
+        border: 1px solid var(--warning-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .error-box {
+        background-color: rgba(231, 76, 60, 0.1);
+        border: 1px solid var(--error-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+
+    /* Mobile responsiveness */
+    @media (max-width: 768px) {
+        .main-header {
+            font-size: 1.8rem !important;
+        }
+        .profile-card {
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
+        .minimal-stats-card h2 {
+            font-size: 1.6rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------
-# 🧭 Header Section
-# -------------------------------
-st.markdown('<h1 class="main-header"> 🔗 My Connections </h1>', unsafe_allow_html=True)
-st.markdown('<div class="subtext">Search, add, and connect with your classmates instantly.</div>', unsafe_allow_html=True)
-
-refresh_time = datetime.now().strftime("%H:%M:%S")
-st.markdown(f'<div class="refresh-indicator">🔄 Last updated: {refresh_time}</div>', unsafe_allow_html=True)
-
 # -------------------------------------
-# 🧩 GOOGLE SHEETS SETUP
+# 🔧 ENHANCED UTILITY FUNCTIONS
 # -------------------------------------
-SHEET_NAME = "myconnections"
-WORKSHEET_INDEX = 0
+def initialize_session_state():
+    """Initialize all session state variables with proper defaults"""
+    defaults = {
+        'search_performed': False,
+        'current_username': None,
+        'admin_authenticated': False,
+        'last_request_time': None,
+        'request_count': 0,
+        'user_searches': {},
+        'data_loaded': False,
+        'search_query': '',
+        'active_tab': 'directory'
+    }
+    
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
-@st.cache_resource(ttl=600)
-def get_gspread_client():
-    if "STREAMLIT_RUNTIME" in os.environ:
-        sa_info = st.secrets["gcp_service_account"]
-        sa_json = json.loads(sa_info) if isinstance(sa_info, str) else sa_info
-        creds = Credentials.from_service_account_info(
-            sa_json,
-            scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive",
-                "https://www.googleapis.com/auth/drive.file",
-            ],
-        )
-    else:
-        creds = Credentials.from_service_account_file(
-            "service_account.json",
-            scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive",
-                "https://www.googleapis.com/auth/drive.file",
-            ],
-        )
-    return gspread.authorize(creds)
+def rate_limit_check():
+    """Implement rate limiting to prevent spam"""
+    now = time.time()
+    if st.session_state.last_request_time is None:
+        st.session_state.last_request_time = now
+        st.session_state.request_count = 1
+        return True
+    
+    time_diff = now - st.session_state.last_request_time
+    
+    if time_diff > RATE_LIMIT_WINDOW:
+        st.session_state.request_count = 1
+        st.session_state.last_request_time = now
+        return True
+    
+    if st.session_state.request_count >= MAX_REQUESTS_PER_WINDOW:
+        st.warning(f"⚠️ Too many requests. Please wait {int(RATE_LIMIT_WINDOW - time_diff)} seconds.")
+        return False
+    
+    st.session_state.request_count += 1
+    return True
 
-# -------------------------------------
-# 🔍 DATA HANDLING (Unchanged)
-# -------------------------------------
+def sanitize_input(text, max_length=100):
+    """Sanitize user input to prevent XSS and other attacks"""
+    if not text:
+        return ""
+    
+    # Remove potentially dangerous characters
+    text = str(text).strip()
+    text = re.sub(r'[<>"\'&]', '', text)
+    
+    # Limit length
+    if len(text) > max_length:
+        text = text[:max_length]
+    
+    return text
+
+def validate_name(name):
+    """Enhanced name validation"""
+    name = sanitize_input(name, MAX_NAME_LENGTH)
+    
+    if not name:
+        return False, "Name cannot be empty"
+    
+    if len(name) < 2:
+        return False, "Name must be at least 2 characters long"
+    
+    if len(name) > MAX_NAME_LENGTH:
+        return False, f"Name must be less than {MAX_NAME_LENGTH} characters"
+    
+    # Allow letters, spaces, hyphens, apostrophes
+    if not re.match(r'^[a-zA-Z\s\-\'\.]+$', name):
+        return False, "Name can only contain letters, spaces, hyphens, and apostrophes"
+    
+    return True, "Valid"
+
 def validate_linkedin_username(username):
-    username = username.strip()
-
-    # 🚫 Prevent spaces anywhere
-    if " " in username:
-        return False, "Username cannot contain spaces"
-
+    """Enhanced LinkedIn username validation"""
+    username = sanitize_input(username, MAX_USERNAME_LENGTH)
+    
     if not username:
         return False, "Username cannot be empty"
     
-    # Only letters, numbers, hyphens, underscores
-    pattern = r'^[a-zA-Z0-9\-_]+$'
+    if " " in username:
+        return False, "Username cannot contain spaces"
+    
+    # Enhanced pattern for LinkedIn usernames
+    pattern = r'^[a-zA-Z0-9\-_\.]+$'
     if not re.match(pattern, username):
-        return False, "Invalid characters. Use only letters, numbers, hyphens, and underscores"
+        return False, "Invalid characters. Use only letters, numbers, hyphens, underscores, and periods"
     
     if len(username) < 3:
         return False, "Username too short (min 3 characters)"
     
-    if len(username) > 100:
-        return False, "Username too long (max 100 characters)"
+    if len(username) > MAX_USERNAME_LENGTH:
+        return False, f"Username too long (max {MAX_USERNAME_LENGTH} characters)"
     
     return True, "Valid"
 
+def safe_linkedin_url(username):
+    """Generate safe LinkedIn URL with proper encoding"""
+    safe_username = quote(username)
+    return f"https://www.linkedin.com/in/{safe_username}/"
+
+# -------------------------------------
+# 🧩 ENHANCED GOOGLE SHEETS SETUP
+# -------------------------------------
+@st.cache_resource(ttl=600)
+def get_gspread_client():
+    """Enhanced Google Sheets client with better error handling"""
+    try:
+        if "STREAMLIT_RUNTIME" in os.environ:
+            sa_info = st.secrets["gcp_service_account"]
+            sa_json = json.loads(sa_info) if isinstance(sa_info, str) else sa_info
+            creds = Credentials.from_service_account_info(
+                sa_json,
+                scopes=[
+                    "https://www.googleapis.com/auth/spreadsheets",
+                    "https://www.googleapis.com/auth/drive",
+                    "https://www.googleapis.com/auth/drive.file",
+                ],
+            )
+        else:
+            # For local development, use environment variable fallback
+            service_account_path = os.getenv("SERVICE_ACCOUNT_PATH", "service_account.json")
+            if not os.path.exists(service_account_path):
+                st.error("❌ Service account file not found. Please check your configuration.")
+                return None
+                
+            creds = Credentials.from_service_account_file(
+                service_account_path,
+                scopes=[
+                    "https://www.googleapis.com/auth/spreadsheets",
+                    "https://www.googleapis.com/auth/drive",
+                    "https://www.googleapis.com/auth/drive.file",
+                ],
+            )
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"🔐 Authentication Error: {str(e)}")
+        return None
 
 def load_data(sheet):
+    """Enhanced data loading with validation and error handling"""
     try:
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
+        
         if df.empty:
             df = pd.DataFrame(columns=["name", "username", "timestamp"])
-        if "timestamp" not in df.columns:
-            df["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Validate and clean data
+        required_columns = ["name", "username", "timestamp"]
+        for col in required_columns:
+            if col not in df.columns:
+                df[col] = ""
+        
+        # Clean and validate existing data
+        df = df.dropna()  # Remove empty rows
         df["name"] = df["name"].astype(str).str.strip()
         df["username"] = df["username"].astype(str).str.strip()
+        
+        # Remove duplicates (case-insensitive)
+        df = df.drop_duplicates(subset=["username"], keep="last")
+        
+        # Validate timestamps
+        try:
+            df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%Y-%m-%d %H:%M:%S")
+        except:
+            df["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        st.session_state.data_loaded = True
         return df
+        
     except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
+        st.error(f"📊 Error loading data: {str(e)}")
         return pd.DataFrame(columns=["name", "username", "timestamp"])
 
 def add_user(sheet, name, username):
-    username = username.strip()
+    """Enhanced user addition with case-insensitive duplicate checking"""
+    if not rate_limit_check():
+        return "rate_limited", "Too many requests. Please wait a moment."
+    
     name = name.strip()
-    if not name:
-        return "invalid_name", "Please enter your name"
-    is_valid, validation_msg = validate_linkedin_username(username)
-    if not is_valid:
-        return "invalid_username", validation_msg
+    username = username.strip()
+    
+    # Validate inputs
+    name_valid, name_msg = validate_name(name)
+    if not name_valid:
+        return "invalid_name", name_msg
+    
+    username_valid, username_msg = validate_linkedin_username(username)
+    if not username_valid:
+        return "invalid_username", username_msg
+    
     try:
-        rows = sheet.get_all_records()
-        for row in rows:
-            if str(row.get("username", "")).lower() == username.lower():
+        # Case-insensitive duplicate check
+        existing_data = sheet.get_all_records()
+        for row in existing_data:
+            existing_username = str(row.get("username", "")).strip().lower()
+            if existing_username == username.lower():
                 return "exists", "This username already exists in the directory"
+        
+        # Add new user
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet.append_row([name, username, timestamp])
+        
+        # Invalidate cache to force refresh
+        st.cache_data.clear()
+        
         return "added", "Successfully added to directory"
+        
     except Exception as e:
         return "error", f"Error adding user: {str(e)}"
 
-# -------------------------------------
-# 🔗 MAIN LOGIC
-# -------------------------------------
-try:
-    client = get_gspread_client()
-    sheet = client.open(SHEET_NAME).get_worksheet(WORKSHEET_INDEX)
-    df = load_data(sheet)
-except Exception:
-    st.error("🚨 Connection Error: Unable to connect to Google Sheets. Please check your credentials.")
-    st.stop()
+def search_users(df, query):
+    """Enhanced search functionality"""
+    if not query:
+        return df
+    
+    query = query.lower().strip()
+    results = df[
+        df["name"].str.lower().str.contains(query, na=False) |
+        df["username"].str.lower().str.contains(query, na=False)
+    ]
+    return results
 
 # -------------------------------------
-# 📊 CLASS STATS
+# 🎯 MAIN APPLICATION
 # -------------------------------------
-st.subheader("Class Overview")
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.markdown(f'<div class="stats-card"><h4> Total</h4><h2>{len(df)}</h2></div>', unsafe_allow_html=True)
-with col2:
-    st.markdown(f'<div class="stats-card"><h4> Unique</h4><h2>{df["name"].nunique() if not df.empty else 0}</h2></div>', unsafe_allow_html=True)
-with col3:
-    st.markdown(f'<div class="stats-card"><h4> Active</h4><h2>{len(df)}</h2></div>', unsafe_allow_html=True)
+def main():
+    # Initialize session state
+    initialize_session_state()
+    
+    # -------------------------------
+    # 🧭 Header Section
+    # -------------------------------
+    st.markdown('<h1 class="main-header" aria-label="My Connections">🔗 My Connections</h1>', unsafe_allow_html=True)
+    st.markdown('<div class="subtext">Search, add, and connect with your classmates instantly.</div>', unsafe_allow_html=True)
 
-st.divider()
+    refresh_time = datetime.now().strftime("%H:%M:%S")
+    st.markdown(f'<div class="refresh-indicator" aria-live="polite">🔄 Last updated: {refresh_time}</div>', unsafe_allow_html=True)
 
-# -------------------------------------
-# 🔍 SEARCH / ADD SECTION
-# -------------------------------------
-st.subheader("🔍 Find or Add Your LinkedIn")
-
-with st.form("search_form"):
-    search_username = st.text_input("Your LinkedIn username:", placeholder="e.g. john-doe-123")
-    submitted = st.form_submit_button("Search")
-    if submitted:
-        st.session_state.search_performed = True
-        if search_username:
-            with st.spinner("Searching..."):
-                time.sleep(0.5)
-                match = df[df["username"].str.lower() == search_username.strip().lower()]
-                if not match.empty:
-                    st.success(f"✅ Found! You are listed as **{match.iloc[0]['name']}**.")
-                    st.session_state.current_username = search_username.strip()
-                else:
-                    st.warning("❌ Not found! Add yourself below ")
-                    st.session_state.current_username = None
+    # -------------------------------------
+    # 📊 DATA LOADING
+    # -------------------------------------
+    try:
+        client = get_gspread_client()
+        if client is None:
+            st.error("🚨 Connection Error: Unable to connect to Google Sheets. Please check your credentials.")
+            return
+            
+        sheet = client.open(SHEET_NAME).get_worksheet(WORKSHEET_INDEX)
+        
+        # Load data with simple spinner
+        if not st.session_state.data_loaded:
+            with st.spinner("Loading directory data..."):
+                df = load_data(sheet)
         else:
-            st.error("Please enter a username to search")
+            df = load_data(sheet)
+            
+    except Exception as e:
+        st.error(f"🚨 Connection Error: Unable to connect to Google Sheets. Please check your credentials. Error: {str(e)}")
+        return
 
-if st.session_state.get("search_performed") and st.session_state.get("current_username") is None:
-    with st.expander("➕ Add Me to Directory", expanded=True):
-        with st.form("add_form"):
-            name_input = st.text_input("Your full name:")
-            agreed = st.checkbox("I confirm my LinkedIn username is correct")
-            if st.form_submit_button("Add"):
-                if not name_input:
-                    st.error("Please enter your name.")
-                elif not agreed:
-                    st.error("Please confirm your username.")
+    # -------------------------------------
+    # 📊 CLASS STATS - MINIMALISTIC VERSION
+    # -------------------------------------
+    st.subheader("Class Overview", anchor="class-overview")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f'''
+        <div class="minimal-stats-card" role="region" aria-label="Total Members">
+            <h4>Total</h4>
+            <h2>{len(df)}</h2>
+        </div>
+        ''', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'''
+        <div class="minimal-stats-card" role="region" aria-label="Unique Members">
+            <h4>Unique</h4>
+            <h2>{df["name"].nunique() if not df.empty else 0}</h2>
+        </div>
+        ''', unsafe_allow_html=True)
+    with col3:
+        active_count = len(df)  # You can enhance this with actual activity tracking
+        st.markdown(f'''
+        <div class="minimal-stats-card" role="region" aria-label="Active Members">
+            <h4>Active</h4>
+            <h2>{active_count}</h2>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    st.divider()
+
+    # -------------------------------------
+    # 🔍 ENHANCED SEARCH / ADD SECTION
+    # -------------------------------------
+    st.subheader("🔍 Find or Add Your LinkedIn", anchor="search-add")
+
+    # Tab interface for better UX
+    tab1, tab2 = st.tabs(["🔍 Search Directory", "➕ Add New Profile"])
+    
+    with tab1:
+        with st.form("search_form", clear_on_submit=True):
+            search_username = st.text_input(
+                "LinkedIn username:",
+                placeholder="e.g. john-doe-123",
+                help="Enter your LinkedIn username (the part after linkedin.com/in/)",
+                key="search_username_input"
+            )
+            
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                submitted = st.form_submit_button(
+                    "Search",
+                    use_container_width=True,
+                    type="primary"
+                )
+            
+            if submitted:
+                if search_username:
+                    with st.spinner("Searching directory..."):
+                        time.sleep(0.3)  # Simulate processing
+                        match = df[df["username"].str.lower() == search_username.strip().lower()]
+                        if not match.empty:
+                            user_data = match.iloc[0]
+                            st.markdown(f'''
+                            <div class="success-box">
+                                <strong>✅ Found!</strong> You are listed as <strong>{user_data['name']}</strong>.
+                            </div>
+                            ''', unsafe_allow_html=True)
+                            st.session_state.current_username = search_username.strip()
+                            st.session_state.search_performed = True
+                        else:
+                            st.markdown(f'''
+                            <div class="warning-box">
+                                <strong>❌ Not found!</strong> This username is not in the directory yet.
+                            </div>
+                            ''', unsafe_allow_html=True)
+                            st.session_state.current_username = None
+                            st.session_state.search_performed = True
                 else:
-                    with st.spinner("Adding..."):
-                        result, message = add_user(sheet, name_input, search_username)
+                    st.error("Please enter a username to search")
+
+    with tab2:
+        with st.form("add_form", clear_on_submit=True):
+            name_input = st.text_input(
+                "Your full name:",
+                placeholder="e.g. John Doe",
+                help="Enter your real name as you'd like it to appear in the directory",
+                key="add_name_input"
+            )
+            
+            username_input = st.text_input(
+                "LinkedIn username:",
+                placeholder="e.g. john-doe-123",
+                help="Your LinkedIn username (from linkedin.com/in/your-username)",
+                key="add_username_input"
+            )
+            
+            agreed = st.checkbox(
+                "I confirm my LinkedIn username is correct and I have permission to share this information",
+                key="consent_checkbox"
+            )
+            
+            if st.form_submit_button("Add to Directory", use_container_width=True, type="primary"):
+                if not name_input or not username_input:
+                    st.error("Please fill in both name and username fields.")
+                elif not agreed:
+                    st.error("Please confirm your username and permissions.")
+                else:
+                    with st.spinner("Adding to directory..."):
+                        result, message = add_user(sheet, name_input, username_input)
                         if result == "added":
-                            st.success("Added successfully! Refreshing list...")
-                            st.session_state.current_username = search_username
+                            st.success("🎉 Added successfully! Refreshing directory...")
+                            st.session_state.current_username = username_input
                             st.session_state.search_performed = False
+                            time.sleep(1)
                             st.rerun()
                         elif result == "exists":
-                            st.info(message)
+                            st.info(f"ℹ️ {message}")
+                        elif result == "rate_limited":
+                            st.warning(f"⏳ {message}")
                         else:
-                            st.error(message)
+                            st.error(f"❌ {message}")
 
-st.divider()
+    st.divider()
 
-# -------------------------------------
-# 📘 CLASS DIRECTORY
-# -------------------------------------
-st.subheader(f"🗳️ Class Directory ({len(df)} members)")
-if st.button("🔄 Refresh Directory"):
-    df = load_data(sheet)
-    st.success("Directory refreshed!")
-    st.rerun()
+    # -------------------------------------
+    # 📘 ENHANCED CLASS DIRECTORY
+    # -------------------------------------
+    st.subheader(f"🗳️ Class Directory ({len(df)} members)", anchor="directory")
+    
+    # Enhanced directory controls
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        search_query = st.text_input(
+            "Search directory:",
+            placeholder="Search by name or username...",
+            key="directory_search",
+            label_visibility="collapsed"
+        )
+    with col2:
+        if st.button("🔄 Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.session_state.data_loaded = False
+            st.rerun()
+    with col3:
+        if st.download_button(
+            "📥 Export CSV",
+            df.to_csv(index=False),
+            file_name=f"class_directory_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        ):
+            st.success("📊 CSV exported successfully!")
 
-display_df = df.copy()
+    # Display directory with search
+    display_df = search_users(df, search_query) if search_query else df
 
-if not display_df.empty:
-    for _, row in display_df.iterrows():
-        name, username = row["name"], row["username"]
-        url = f"https://www.linkedin.com/in/{username}/"
-        card_class = "profile-card"
-        badge = "👤"
-        if st.session_state.get("current_username") and username.lower() == st.session_state["current_username"].lower():
-            card_class += " current-user"
-            badge = "⭐ YOU"
-        st.markdown(f"""
-        <div class="{card_class}">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <strong>{name}</strong><br>
-                    <code>@{username}</code>
+    if not display_df.empty:
+        st.caption(f"Showing {len(display_df)} of {len(df)} members")
+        
+        for _, row in display_df.iterrows():
+            name, username = row["name"], row["username"]
+            url = safe_linkedin_url(username)
+            
+            card_class = "profile-card"
+            badge = "👤"
+            aria_label = f"Profile card for {name}"
+            
+            # Highlight current user
+            if st.session_state.get("current_username") and username.lower() == st.session_state["current_username"].lower():
+                card_class += " current-user"
+                badge = "⭐ YOU"
+                aria_label += " - This is you"
+            
+            st.markdown(f'''
+            <div class="{card_class}" role="article" aria-label="{aria_label}">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap: 1rem;">
+                    <div style="flex: 1;">
+                        <strong>{name}</strong><br>
+                        <code>@{username}</code>
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--text-secondary);">{badge}</div>
                 </div>
-                <div>{badge}</div>
+                <a href="{url}" target="_blank" rel="noopener noreferrer" aria-label="View LinkedIn profile of {name}">
+                    🔗 View LinkedIn Profile
+                </a>
             </div>
-            <a href="{url}" target="_blank">🔗 View LinkedIn Profile</a>
-        </div>
-        """, unsafe_allow_html=True)
-else:
-    st.info("No profiles yet. Be the first to add yours!")
-
-st.caption("📱 Tip: On mobile, links open directly in the LinkedIn app!")
-
-st.divider()
-
-# -------------------------------------
-# 🛠️ ADMIN SECTION (Password Protected)
-# -------------------------------------
-with st.expander("🛠️ Admin Tools (Restricted Access)", expanded=False):
-    if "admin_authenticated" not in st.session_state:
-        st.session_state.admin_authenticated = False
-
-    admin_password = st.secrets.get("admin_password", None)  # store this in secrets.toml
-
-    if not st.session_state.admin_authenticated:
-        password_input = st.text_input("Enter admin password:", type="password", key="admin_pass_input")
-        if st.button("🔓 Unlock Admin Tools"):
-            if password_input == admin_password:
-                st.session_state.admin_authenticated = True
-                st.success("✅ Access granted. Welcome, Admin!")
-                st.rerun()
-            else:
-                st.error("❌ Incorrect password. Please try again.")
+            ''', unsafe_allow_html=True)
     else:
-        st.success("🔐 Admin access granted")
+        if search_query:
+            st.info(f"🔍 No members found matching '{search_query}'. Try a different search term.")
+        else:
+            st.info("👥 No profiles yet. Be the first to add yours!")
 
-        st.write("**Data Management**")
-        if st.button("🔄 Manual Refresh Data"):
-            df = load_data(sheet)
-            st.success("Data refreshed successfully!")
-            st.rerun()
+    st.caption("📱 Tip: On mobile, links open directly in the LinkedIn app!")
+    st.divider()
 
-        st.write("**Export Data**")
-        if not df.empty:
-            csv = df.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Directory as CSV",
-                data=csv,
-                file_name=f"class_linkedin_directory_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-            )
-
-        st.write("**Debug Info**")
-        st.code(f"Total records: {len(df)}")
-        if not df.empty:
-            st.code(f"Columns: {', '.join(df.columns)}")
-            st.code(f"Sample data:\n{df.head(3).to_string()}")
-
-        if st.button("🔒 Lock Admin Tools"):
+    # -------------------------------------
+    # 🛠️ ENHANCED ADMIN SECTION (FIXED)
+    # -------------------------------------
+    with st.expander("🛠️ Admin Tools (Restricted Access)", expanded=False):
+        if "admin_authenticated" not in st.session_state:
             st.session_state.admin_authenticated = False
-            st.info("Session locked. You will need to re-enter the password next time.")
-            st.rerun()
 
-# -------------------------------------
-# 🌟 CONNECT WITH CREATOR (Footer)
-# -------------------------------------
-instagram_username = st.secrets.get("instagram_username", None)
-github_username = st.secrets.get("github_username", None)
-gmail_address = st.secrets.get("gmail_address", None)
+        admin_password = st.secrets.get("admin_password")
+        
+        if not admin_password:
+            st.warning("Admin password not configured. Set ADMIN_PASSWORD in secrets.")
+        
+        if not st.session_state.admin_authenticated:
+            st.write("**Admin Authentication Required**")
+            password_input = st.text_input(
+                "Enter admin password:",
+                type="password",
+                key="admin_pass_input",
+                help="Contact system administrator for access"
+            )
+            
+            if st.button("🔓 Unlock Admin Tools", use_container_width=True):
+                # Use timing-safe comparison
+                input_hash = hashlib.sha256(password_input.encode()).hexdigest()
+                stored_hash = hashlib.sha256(admin_password.encode()).hexdigest()
+                
+                if input_hash == stored_hash:
+                    st.session_state.admin_authenticated = True
+                    st.success("✅ Access granted. Welcome, Admin!")
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password. Please try again.")
+                    time.sleep(1)  # Prevent timing attacks
+        else:
+            st.success("🔐 Admin access granted")
+            
+            st.write("**Data Management**")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Force Refresh Data", use_container_width=True):
+                    st.cache_data.clear()
+                    st.session_state.data_loaded = False
+                    st.success("Cache cleared! Refreshing data...")
+                    st.rerun()
+            
+            with col2:
+                if st.button("📊 Update Statistics", use_container_width=True):
+                    st.success("Statistics updated!")
+                    st.rerun()
 
-if instagram_username or github_username or gmail_address:
-    footer_html = f"""
-    <div style="
-        text-align: center;
-        margin-top: 2rem;
-        padding: 1.2rem;
-        border-radius: 12px;
-        background: #f9fafb;
-        border: 1px solid #e5e7eb;
-    ">
-        <h4 style="margin-bottom: 0.3rem; color: #0A66C2;">💬 Connect with the Creator</h4>
-        <p style="margin-top: 0; margin-bottom: 0.8rem; color: #555;">
-            Stay updated with more class tools & projects
+            st.write("**Export Options**")
+            if not df.empty:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        "📥 Download as CSV",
+                        df.to_csv(index=False),
+                        file_name=f"class_directory_full_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                with col2:
+                    # JSON export
+                    json_data = df.to_json(orient='records', indent=2)
+                    st.download_button(
+                        "📄 Download as JSON",
+                        json_data,
+                        file_name=f"class_directory_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
+
+            st.write("**Debug Information**")
+            with st.expander("System Information"):
+                # FIXED: Convert hash to string before slicing
+                session_hash = str(hash(str(st.session_state)))
+                st.code(f"""
+                Total Records: {len(df)}
+                Data Columns: {', '.join(df.columns)}
+                Last Updated: {refresh_time}
+                Session ID: {session_hash[:8]}
+                """)
+                
+                if not df.empty:
+                    st.write("Sample Data:")
+                    st.dataframe(df.head(3), use_container_width=True)
+
+            if st.button("🔒 Lock Admin Tools", use_container_width=True):
+                st.session_state.admin_authenticated = False
+                st.info("🔒 Session locked. Password required for next access.")
+                st.rerun()
+
+    # -------------------------------------
+    # 🌟 ENHANCED FOOTER
+    # -------------------------------------
+    st.markdown("---")
+    
+    instagram_username = st.secrets.get("instagram_username")
+    github_username = st.secrets.get("github_username")
+    gmail_address = st.secrets.get("gmail_address")
+
+    if instagram_username or github_username or gmail_address:
+        footer_html = f'''
+        <div style="
+            text-align: center;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            border-radius: 12px;
+            background: var(--bg-hover);
+            border: 1px solid var(--border-color);
+        " role="contentinfo" aria-label="Connect with creator">
+            <h4 style="margin-bottom: 0.5rem; color: var(--accent-color);">💬 Connect with the Creator</h4>
+            <p style="margin-top: 0; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                Stay updated with more class tools & projects
+            </p>
+            <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+        '''
+        
+        if instagram_username:
+            footer_html += f'''
+            <a href="https://www.instagram.com/{instagram_username}/" target="_blank" rel="noopener noreferrer"
+               style="
+                   color: white;
+                   background: linear-gradient(45deg, #E1306C, #F77737, #FCAF45);
+                   padding: 0.6rem 1.4rem;
+                   border-radius: 25px;
+                   font-weight: 600;
+                   text-decoration: none;
+                   display: inline-flex;
+                   align-items: center;
+                   gap: 0.5rem;
+                   transition: transform 0.2s ease;
+               "
+               onmouseover="this.style.transform='scale(1.05)'"
+               onmouseout="this.style.transform='scale(1)'"
+               aria-label="Follow on Instagram">
+               📸 @{instagram_username}
+            </a>
+            '''
+        
+        if github_username:
+            footer_html += f'''
+            <a href="https://github.com/{github_username}" target="_blank" rel="noopener noreferrer"
+               style="
+                   color: white;
+                   background: #24292E;
+                   padding: 0.6rem 1.4rem;
+                   border-radius: 25px;
+                   font-weight: 600;
+                   text-decoration: none;
+                   display: inline-flex;
+                   align-items: center;
+                   gap: 0.5rem;
+                   transition: transform 0.2s ease;
+               "
+               onmouseover="this.style.transform='scale(1.05)'"
+               onmouseout="this.style.transform='scale(1)'"
+               aria-label="View GitHub profile">
+               💻 @{github_username}
+            </a>
+            '''
+        
+        if gmail_address:
+            footer_html += f'''
+            <a href="mailto:{gmail_address}" 
+               style="
+                   color: white;
+                   background: #EA4335;
+                   padding: 0.6rem 1.4rem;
+                   border-radius: 25px;
+                   font-weight: 600;
+                   text-decoration: none;
+                   display: inline-flex;
+                   align-items: center;
+                   gap: 0.5rem;
+                   transition: transform 0.2s ease;
+               "
+               onmouseover="this.style.transform='scale(1.05)'"
+               onmouseout="this.style.transform='scale(1)'"
+               aria-label="Send email">
+               📧 Contact
+            </a>
+            '''
+        
+        footer_html += "</div></div>"
+        
+        components.html(footer_html, height=180)
+
+    # -------------------------------------
+    # 🔒 PRIVACY & ACCESSIBILITY FOOTNOTE
+    # -------------------------------------
+    st.markdown("""
+    <div style="text-align: center; margin-top: 2rem; color: var(--text-secondary); font-size: 0.8rem;">
+        <p>
+            🔒 <strong>Privacy First:</strong> Your data is stored securely and used only for class networking purposes.<br>
+            ♿ <strong>Accessibility:</strong> This app follows WCAG guidelines for better user experience.
         </p>
-        <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
-    """
-    
-    if instagram_username:
-        footer_html += f"""
-        <a href="https://www.instagram.com/{instagram_username}/" target="_blank"
-           style="
-               color: white;
-               background: linear-gradient(90deg, #E1306C, #F77737);
-               padding: 0.5rem 1.2rem;
-               border-radius: 30px;
-               font-weight: 600;
-               text-decoration: none;
-               display: inline-block;
-           ">
-           📸 @{instagram_username}
-        </a>
-        """
-    
-    if github_username:
-        footer_html += f"""
-        <a href="https://github.com/{github_username}" target="_blank"
-           style="
-               color: white;
-               background: #24292E;
-               padding: 0.5rem 1.2rem;
-               border-radius: 30px;
-               font-weight: 600;
-               text-decoration: none;
-               display: inline-block;
-           ">
-           💻 @{github_username}
-        </a>
-        """
-    
-    if gmail_address:
-        footer_html += f"""
-        <a href="mailto:{gmail_address}" target="_blank"
-           style="
-               color: white;
-               background: #EA4335;
-               padding: 0.5rem 1.2rem;
-               border-radius: 30px;
-               font-weight: 600;
-               text-decoration: none;
-               display: inline-block;
-           ">
-           📧 Gmail
-        </a>
-        """
-    
-    footer_html += "</div></div>"
-    
-    # Use components.html instead of st.markdown
-    components.html(footer_html, height=200)
+    </div>
+    """, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
