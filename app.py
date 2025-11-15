@@ -17,7 +17,7 @@ import hashlib
 st.set_page_config(
     page_title="My Connections", 
     layout="centered",
-    page_icon="assests/linkedin.png",
+    page_icon="🔗",
     initial_sidebar_state="collapsed"
 )
 
