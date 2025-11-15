@@ -334,9 +334,16 @@ def safe_linkedin_url(username):
 def get_gspread_client():
     """Enhanced Google Sheets client with better error handling"""
     try:
-        if "STREAMLIT_RUNTIME" in os.environ:
+        # Check if we're in Streamlit Cloud or have secrets available
+        if "gcp_service_account" in st.secrets:
             sa_info = st.secrets["gcp_service_account"]
-            sa_json = json.loads(sa_info) if isinstance(sa_info, str) else sa_info
+            
+            # Handle both string and dict formats
+            if isinstance(sa_info, str):
+                sa_json = json.loads(sa_info)
+            else:
+                sa_json = sa_info
+                
             creds = Credentials.from_service_account_info(
                 sa_json,
                 scopes=[
@@ -345,24 +352,40 @@ def get_gspread_client():
                     "https://www.googleapis.com/auth/drive.file",
                 ],
             )
-        else:
-            # For local development, use environment variable fallback
-            service_account_path = os.getenv("SERVICE_ACCOUNT_PATH", "service_account.json")
-            if not os.path.exists(service_account_path):
-                st.error("❌ Service account file not found. Please check your configuration.")
-                return None
-                
+            st.success("✅ Using Streamlit Secrets for authentication")
+            
+        # Local development fallback
+        elif os.path.exists("service_account.json"):
             creds = Credentials.from_service_account_file(
-                service_account_path,
+                "service_account.json",
                 scopes=[
                     "https://www.googleapis.com/auth/spreadsheets",
                     "https://www.googleapis.com/auth/drive",
                     "https://www.googleapis.com/auth/drive.file",
                 ],
             )
+            st.success("✅ Using local service_account.json for authentication")
+            
+        else:
+            st.error("""
+            🔐 Authentication Error: No credentials found.
+            
+            For Local Development:
+            - Download service_account.json from Google Cloud Console
+            - Place it in your project folder
+            
+            For Streamlit Cloud:
+            - Add your service account JSON to Streamlit Secrets
+            - Go to App Settings → Secrets
+            - Add: gcp_service_account = { your_json_here }
+            """)
+            return None
+            
         return gspread.authorize(creds)
+        
     except Exception as e:
         st.error(f"🔐 Authentication Error: {str(e)}")
+        st.info("💡 Check the setup guide in the documentation below.")
         return None
 
 def load_data(sheet):
@@ -472,7 +495,54 @@ def main():
     try:
         client = get_gspread_client()
         if client is None:
-            st.error("🚨 Connection Error: Unable to connect to Google Sheets. Please check your credentials.")
+            # Show setup instructions
+            with st.expander("🔧 Setup Instructions", expanded=True):
+                st.markdown("""
+                ### 🔐 Google Sheets Setup Guide
+                
+                **1. Create Google Service Account:**
+                - Go to [Google Cloud Console](https://console.cloud.google.com/)
+                - Create a new project or select existing one
+                - Enable **Google Sheets API** and **Google Drive API**
+                - Create a Service Account and download JSON key
+                
+                **2. Share your Google Sheet:**
+                - Open your Google Sheet ([template](https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit?usp=sharing))
+                - Click Share → Add your service account email
+                - Grant **Editor** permissions
+                
+                **3. Configure Authentication:**
+                
+                **For Local Development:**
+                ```bash
+                # Rename downloaded JSON to:
+                service_account.json
+                # Place in your project folder
+                ```
+                
+                **For Streamlit Cloud:**
+                - Go to App Settings → Secrets
+                - Add:
+                ```toml
+                [gcp_service_account]
+                type = "service_account"
+                project_id = "your-project-id"
+                private_key_id = "your-private-key-id"
+                private_key = "-----BEGIN PRIVATE KEY-----\\nyour-key\\n-----END PRIVATE KEY-----\\n"
+                client_email = "your-service-account@your-project.iam.gserviceaccount.com"
+                client_id = "your-client-id"
+                auth_uri = "https://accounts.google.com/o/oauth2/auth"
+                token_uri = "https://oauth2.googleapis.com/token"
+                ```
+                
+                **Optional Secrets:**
+                ```toml
+                admin_password = "your-admin-password"
+                instagram_username = "your-instagram"
+                github_username = "your-github"
+                gmail_address = "your-email@gmail.com"
+                ```
+                """)
             return
             
         sheet = client.open(SHEET_NAME).get_worksheet(WORKSHEET_INDEX)
@@ -485,7 +555,8 @@ def main():
             df = load_data(sheet)
             
     except Exception as e:
-        st.error(f"🚨 Connection Error: Unable to connect to Google Sheets. Please check your credentials. Error: {str(e)}")
+        st.error(f"🚨 Connection Error: Unable to connect to Google Sheets. Error: {str(e)}")
+        st.info("💡 Make sure your Google Sheet is shared with the service account email.")
         return
 
     # -------------------------------------
@@ -865,7 +936,7 @@ def main():
                onmouseover="this.style.transform='scale(1.05)'"
                onmouseout="this.style.transform='scale(1)'"
                aria-label="Send email">
-               📧 Contact
+               📧 Email
             </a>
             '''
         
