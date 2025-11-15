@@ -17,7 +17,7 @@ import hashlib
 st.set_page_config(
     page_title="My Connections", 
     layout="centered",
-    page_icon="🔗",
+    page_icon="assests/linkedin.png",
     initial_sidebar_state="collapsed"
 )
 
@@ -30,196 +30,351 @@ RATE_LIMIT_WINDOW = 30  # seconds
 MAX_REQUESTS_PER_WINDOW = 5
 
 # -------------------------------------
-# 🎨 ENHANCED STYLING WITH ACCESSIBILITY
+# 🎨 BEAUTIFUL DARK/LIGHT THEME WITH CENTERED TOGGLE
 # -------------------------------------
 st.markdown("""
 <style>
-    /* Root theming with improved contrast */
+    /* Beautiful Color System */
     :root {
-        --accent-color: #0A66C2;
-        --accent-hover: #084d94;
-        --text-primary: #111111;
-        --text-secondary: #444444;
-        --bg-card: #ffffff;
-        --bg-hover: #f8f9fa;
-        --border-color: #e1e5e9;
-        --success-color: #2ecc71;
-        --warning-color: #f39c12;
-        --error-color: #e74c3c;
-    }
-    [data-theme="dark"] {
-        --accent-color: #60a5fa;
-        --accent-hover: #3b82f6;
-        --text-primary: #f5f5f5;
-        --text-secondary: #cccccc;
-        --bg-card: #1e1e1e;
-        --bg-hover: #2a2a2a;
-        --border-color: #444444;
-        --success-color: #27ae60;
-        --warning-color: #f39c12;
-        --error-color: #e74c3c;
+        /* Light Theme */
+        --primary-bg: #ffffff;
+        --secondary-bg: #f8f9fa;
+        --card-bg: #ffffff;
+        --text-primary: #1a1a1a;
+        --text-secondary: #666666;
+        --text-muted: #888888;
+        --accent-primary: #2563eb;
+        --accent-hover: #1d4ed8;
+        --border-color: #e5e7eb;
+        --shadow: 0 1px 3px rgba(0,0,0,0.1);
+        --shadow-hover: 0 4px 12px rgba(0,0,0,0.15);
+        
+        /* Success/Warning/Error */
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --error-color: #ef4444;
+        --success-bg: rgba(16, 185, 129, 0.1);
+        --warning-bg: rgba(245, 158, 11, 0.1);
+        --error-bg: rgba(239, 68, 68, 0.1);
     }
 
-    /* Improved focus indicators for accessibility */
-    *:focus {
-        outline: 2px solid var(--accent-color);
-        outline-offset: 2px;
+    [data-theme="dark"] {
+        /* Dark Theme */
+        --primary-bg: #0f0f0f;
+        --secondary-bg: #1a1a1a;
+        --card-bg: #1e1e1e;
+        --text-primary: #f5f5f5;
+        --text-secondary: #a3a3a3;
+        --text-muted: #737373;
+        --accent-primary: #3b82f6;
+        --accent-hover: #60a5fa;
+        --border-color: #404040;
+        --shadow: 0 1px 3px rgba(0,0,0,0.3);
+        --shadow-hover: 0 4px 12px rgba(0,0,0,0.4);
+        
+        /* Success/Warning/Error */
+        --success-color: #34d399;
+        --warning-color: #fbbf24;
+        --error-color: #f87171;
+        --success-bg: rgba(52, 211, 153, 0.15);
+        --warning-bg: rgba(251, 191, 36, 0.15);
+        --error-bg: rgba(248, 113, 113, 0.15);
+    }
+
+    /* Smooth transitions */
+    * {
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    /* Main app background */
+    .main .block-container {
+        background-color: var(--primary-bg);
+        color: var(--text-primary);
+    }
+
+    /* Centered Theme Toggle Button */
+    .theme-toggle {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        transition: all 0.3s ease;
+        margin: 0 auto;
+    }
+
+    .theme-toggle:hover {
+        transform: scale(1.1);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--accent-primary);
+    }
+
+    .theme-toggle svg {
+        width: 24px;
+        height: 24px;
+        fill: var(--text-primary);
     }
 
     /* Layout and Typography */
     .main-header {
-        font-size: 2.2rem !important;
-        color: var(--accent-color);
+        font-size: 2.5rem !important;
+        color: var(--accent-primary);
         text-align: center;
         font-weight: 700;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.5rem;
         line-height: 1.2;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
+
     .subtext {
         text-align: center;
         color: var(--text-secondary);
-        font-size: 1rem;
-        margin-bottom: 1.5rem;
-        line-height: 1.4;
+        font-size: 1.1rem;
+        margin-bottom: 1rem;
+        line-height: 1.5;
+        font-weight: 400;
     }
 
     /* Enhanced Card Styling */
     .profile-card {
-        background-color: var(--bg-card);
-        border-radius: 12px;
-        padding: 1.2rem 1.5rem;
-        margin: 0.8rem 0;
+        background-color: var(--card-bg);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin: 1rem 0;
         border: 1px solid var(--border-color);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        transition: all 0.2s ease-in-out;
-    }
-    .profile-card:hover {
-        background-color: var(--bg-hover);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .profile-card strong {
-        color: var(--text-primary);
-        font-size: 1.1rem;
-        text-transform: capitalize;
-        font-weight: 600;
-    }
-    .profile-card code {
-        background: rgba(0,0,0,0.08);
-        padding: 0.3rem 0.6rem;
-        border-radius: 6px;
-        color: var(--text-primary);
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 0.9rem;
-    }
-    [data-theme="dark"] .profile-card code {
-        background: rgba(255,255,255,0.12);
-        color: #b5f3ff;
-    }
-    .profile-card a {
-        color: var(--accent-color);
-        text-decoration: none;
-        font-weight: 600;
-        border: 1px solid var(--accent-color);
-        padding: 0.4rem 1rem;
-        border-radius: 20px;
-        display: inline-block;
-        margin-top: 0.5rem;
-        transition: all 0.2s ease;
-    }
-    .profile-card a:hover {
-        background-color: var(--accent-color);
-        color: white;
-        text-decoration: none;
+        box-shadow: var(--shadow);
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
     }
 
-    /* Highlight cards with improved contrast */
-    .current-user {
-        border-left: 4px solid #FFD700;
-        background-color: rgba(255, 215, 0, 0.1);
+    .profile-card:hover {
+        background-color: var(--secondary-bg);
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--accent-primary);
     }
+
+    .profile-card strong {
+        color: var(--text-primary);
+        font-size: 1.2rem;
+        font-weight: 600;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+
+    .profile-card code {
+        background: var(--secondary-bg);
+        padding: 0.4rem 0.8rem;
+        border-radius: 8px;
+        color: var(--accent-primary);
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.9rem;
+        border: 1px solid var(--border-color);
+        font-weight: 500;
+    }
+
+    .profile-card a {
+        color: var(--accent-primary);
+        text-decoration: none;
+        font-weight: 600;
+        border: 2px solid var(--accent-primary);
+        padding: 0.6rem 1.2rem;
+        border-radius: 25px;
+        display: inline-block;
+        margin-top: 1rem;
+        transition: all 0.3s ease;
+        background: transparent;
+    }
+
+    .profile-card a:hover {
+        background-color: var(--accent-primary);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    /* Highlight cards */
+    .current-user {
+        border-left: 6px solid #fbbf24;
+        background: linear-gradient(135deg, var(--card-bg), rgba(251, 191, 36, 0.1));
+    }
+
     .instructor-card {
-        border-left: 4px solid var(--success-color);
-        background-color: rgba(46, 204, 113, 0.1);
+        border-left: 6px solid var(--success-color);
+        background: linear-gradient(135deg, var(--card-bg), var(--success-bg));
     }
 
     /* Minimalistic Stats Cards */
     .minimal-stats-card {
-        background: transparent;
+        background: linear-gradient(135deg, var(--card-bg), var(--secondary-bg));
         color: var(--text-primary);
-        padding: 1.2rem 0.5rem;
-        border-radius: 12px;
+        padding: 1.5rem 1rem;
+        border-radius: 16px;
         text-align: center;
-        border: 2px solid var(--border-color);
+        border: 1px solid var(--border-color);
         transition: all 0.3s ease;
         height: 100%;
+        box-shadow: var(--shadow);
     }
+
     .minimal-stats-card:hover {
-        background: var(--bg-hover);
-        border-color: var(--accent-color);
-        transform: translateY(-2px);
+        background: linear-gradient(135deg, var(--secondary-bg), var(--card-bg));
+        border-color: var(--accent-primary);
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-hover);
     }
+
     .minimal-stats-card h4 {
         color: var(--text-secondary);
         font-size: 0.9rem;
         font-weight: 600;
-        margin-bottom: 0.8rem;
+        margin-bottom: 1rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
+
     .minimal-stats-card h2 {
-        color: var(--accent-color);
-        font-size: 2rem;
+        color: var(--accent-primary);
+        font-size: 2.2rem;
         font-weight: 700;
         margin: 0;
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
+
     .refresh-indicator {
         text-align: center;
         color: var(--text-secondary);
         font-size: 0.9rem;
-        margin-bottom: 1.5rem;
-        padding: 0.5rem;
-        background: var(--bg-hover);
-        border-radius: 8px;
+        margin-bottom: 2rem;
+        padding: 0.8rem;
+        background: var(--secondary-bg);
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
     }
 
     /* Success/Warning/Error states */
     .success-box {
-        background-color: rgba(46, 204, 113, 0.1);
+        background: var(--success-bg);
         border: 1px solid var(--success-color);
-        border-radius: 8px;
-        padding: 1rem;
+        border-radius: 12px;
+        padding: 1.2rem;
         margin: 1rem 0;
+        color: var(--success-color);
     }
+
     .warning-box {
-        background-color: rgba(243, 156, 18, 0.1);
+        background: var(--warning-bg);
         border: 1px solid var(--warning-color);
-        border-radius: 8px;
-        padding: 1rem;
+        border-radius: 12px;
+        padding: 1.2rem;
         margin: 1rem 0;
+        color: var(--warning-color);
     }
+
     .error-box {
-        background-color: rgba(231, 76, 60, 0.1);
+        background: var(--error-bg);
         border: 1px solid var(--error-color);
-        border-radius: 8px;
-        padding: 1rem;
+        border-radius: 12px;
+        padding: 1.2rem;
         margin: 1rem 0;
+        color: var(--error-color);
+    }
+
+    /* Form elements */
+    .stTextInput input, .stTextInput textarea {
+        background: var(--card-bg) !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border-color) !important;
+        border-radius: 12px !important;
+    }
+
+    .stButton button {
+        background: linear-gradient(135deg, var(--accent-primary), var(--accent-hover)) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .stButton button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
     }
 
     /* Mobile responsiveness */
     @media (max-width: 768px) {
         .main-header {
-            font-size: 1.8rem !important;
+            font-size: 2rem !important;
         }
         .profile-card {
-            padding: 1rem;
-            margin: 0.5rem 0;
+            padding: 1.2rem;
+            margin: 0.8rem 0;
         }
         .minimal-stats-card h2 {
-            font-size: 1.6rem;
+            font-size: 1.8rem;
+        }
+        .theme-toggle {
+            width: 50px;
+            height: 50px;
+        }
+        .theme-toggle svg {
+            width: 20px;
+            height: 20px;
         }
     }
 </style>
+
+<!-- Theme Toggle with System Preference Detection -->
+<script>
+    // Function to set theme
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+    }
+
+    // Initialize theme
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        if (savedTheme) {
+            setTheme(savedTheme);
+        } else if (systemPrefersDark) {
+            setTheme('dark');
+        } else {
+            setTheme('light');
+        }
+    }
+
+    // Toggle theme
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        setTheme(newTheme);
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', initTheme);
+
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+        if (!localStorage.getItem('theme')) {
+            setTheme(e.matches ? 'dark' : 'light');
+        }
+    });
+</script>
 """, unsafe_allow_html=True)
 
 # -------------------------------------
@@ -352,7 +507,6 @@ def get_gspread_client():
                     "https://www.googleapis.com/auth/drive.file",
                 ],
             )
-            st.success("✅ Using Streamlit Secrets for authentication")
             
         # Local development fallback
         elif os.path.exists("service_account.json"):
@@ -364,7 +518,6 @@ def get_gspread_client():
                     "https://www.googleapis.com/auth/drive.file",
                 ],
             )
-            st.success("✅ Using local service_account.json for authentication")
             
         else:
             st.error("""
@@ -488,6 +641,17 @@ def main():
 
     refresh_time = datetime.now().strftime("%H:%M:%S")
     st.markdown(f'<div class="refresh-indicator" aria-live="polite">🔄 Last updated: {refresh_time}</div>', unsafe_allow_html=True)
+
+    # Add Centered Theme Toggle Button
+    st.markdown("""
+    <div style="display: flex; justify-content: center; margin: 2rem 0;">
+        <div class="theme-toggle" onclick="toggleTheme()">
+            <svg viewBox="0 0 24 24">
+                <path d="M12,18C11.11,18 10.26,17.8 9.5,17.45C11.56,16.5 13,14.42 13,12C13,9.58 11.56,7.5 9.5,6.55C10.26,6.2 11.11,6 12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18M20,8.69V4H15.31L12,0.69L8.69,4H4V8.69L0.69,12L4,15.31V20H8.69L12,23.31L15.31,20H20V15.31L23.31,12L20,8.69Z" />
+            </svg>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # -------------------------------------
     # 📊 DATA LOADING
@@ -690,7 +854,7 @@ def main():
     st.subheader(f"🗳️ Class Directory ({len(df)} members)", anchor="directory")
     
     # Enhanced directory controls
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2 = st.columns([3, 1])
     with col1:
         search_query = st.text_input(
             "Search directory:",
@@ -703,15 +867,6 @@ def main():
             st.cache_data.clear()
             st.session_state.data_loaded = False
             st.rerun()
-    with col3:
-        if st.download_button(
-            "📥 Export CSV",
-            df.to_csv(index=False),
-            file_name=f"class_directory_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        ):
-            st.success("📊 CSV exported successfully!")
 
     # Display directory with search
     display_df = search_users(df, search_query) if search_query else df
@@ -757,101 +912,8 @@ def main():
     st.divider()
 
     # -------------------------------------
-    # 🛠️ ENHANCED ADMIN SECTION (FIXED)
-    # -------------------------------------
-    with st.expander("🛠️ Admin Tools (Restricted Access)", expanded=False):
-        if "admin_authenticated" not in st.session_state:
-            st.session_state.admin_authenticated = False
-
-        admin_password = st.secrets.get("admin_password")
-        
-        if not admin_password:
-            st.warning("Admin password not configured. Set ADMIN_PASSWORD in secrets.")
-        
-        if not st.session_state.admin_authenticated:
-            st.write("**Admin Authentication Required**")
-            password_input = st.text_input(
-                "Enter admin password:",
-                type="password",
-                key="admin_pass_input",
-                help="Contact system administrator for access"
-            )
-            
-            if st.button("🔓 Unlock Admin Tools", use_container_width=True):
-                # Use timing-safe comparison
-                input_hash = hashlib.sha256(password_input.encode()).hexdigest()
-                stored_hash = hashlib.sha256(admin_password.encode()).hexdigest()
-                
-                if input_hash == stored_hash:
-                    st.session_state.admin_authenticated = True
-                    st.success("✅ Access granted. Welcome, Admin!")
-                    st.rerun()
-                else:
-                    st.error("❌ Incorrect password. Please try again.")
-                    time.sleep(1)  # Prevent timing attacks
-        else:
-            st.success("🔐 Admin access granted")
-            
-            st.write("**Data Management**")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("🔄 Force Refresh Data", use_container_width=True):
-                    st.cache_data.clear()
-                    st.session_state.data_loaded = False
-                    st.success("Cache cleared! Refreshing data...")
-                    st.rerun()
-            
-            with col2:
-                if st.button("📊 Update Statistics", use_container_width=True):
-                    st.success("Statistics updated!")
-                    st.rerun()
-
-            st.write("**Export Options**")
-            if not df.empty:
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(
-                        "📥 Download as CSV",
-                        df.to_csv(index=False),
-                        file_name=f"class_directory_full_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                        mime="text/csv",
-                        use_container_width=True
-                    )
-                with col2:
-                    # JSON export
-                    json_data = df.to_json(orient='records', indent=2)
-                    st.download_button(
-                        "📄 Download as JSON",
-                        json_data,
-                        file_name=f"class_directory_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-                        mime="application/json",
-                        use_container_width=True
-                    )
-
-            st.write("**Debug Information**")
-            with st.expander("System Information"):
-                # FIXED: Convert hash to string before slicing
-                session_hash = str(hash(str(st.session_state)))
-                st.code(f"""
-                Total Records: {len(df)}
-                Data Columns: {', '.join(df.columns)}
-                Last Updated: {refresh_time}
-                Session ID: {session_hash[:8]}
-                """)
-                
-                if not df.empty:
-                    st.write("Sample Data:")
-                    st.dataframe(df.head(3), use_container_width=True)
-
-            if st.button("🔒 Lock Admin Tools", use_container_width=True):
-                st.session_state.admin_authenticated = False
-                st.info("🔒 Session locked. Password required for next access.")
-                st.rerun()
-
-    # -------------------------------------
     # 🌟 ENHANCED FOOTER
     # -------------------------------------
-    st.markdown("---")
     
     instagram_username = st.secrets.get("instagram_username")
     github_username = st.secrets.get("github_username")
@@ -863,11 +925,12 @@ def main():
             text-align: center;
             margin-top: 2rem;
             padding: 1.5rem;
-            border-radius: 12px;
-            background: var(--bg-hover);
+            border-radius: 16px;
+            background: var(--secondary-bg);
             border: 1px solid var(--border-color);
+            color: var(--text-primary);
         " role="contentinfo" aria-label="Connect with creator">
-            <h4 style="margin-bottom: 0.5rem; color: var(--accent-color);">💬 Connect with the Creator</h4>
+            <h4 style="margin-bottom: 0.5rem; color: var(--accent-primary);">💬 Connect with the Creator</h4>
             <p style="margin-top: 0; margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
                 Stay updated with more class tools & projects
             </p>
